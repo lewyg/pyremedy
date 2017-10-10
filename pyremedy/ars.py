@@ -9,9 +9,26 @@ from . import arh
 from .exceptions import ARSError
 
 
+def enc_u8(u_str):
+    try:
+        if type(u_str) is str:
+            return u_str.encode('UTF-8')
+        return u_str
+    except TypeError:
+        return u_str if isinstance(u_str, bytes) else u_str.encode()
+
+
+def dec_u8(b_str):
+    try:
+        if type(b_str) is bytes:
+            return b_str.decode('UTF-8')
+        return b_str
+    except NameError:
+        return b_str if isinstance(b_str, str) else b_str.decode()
+
+
 class ARS(object):
-    """
-    The ARS object implements a simple CRUD interface for Remedy ARS
+    """The ARS object implements a simple CRUD interface for Remedy ARS
     servers.  It is passed server details and credentials and acts as the main
     object which talks to Remedy ARS.
 
@@ -27,6 +44,10 @@ class ARS(object):
     """
 
     def __init__(self, server, user, password, port=0, rpc_program_number=0):
+        server = enc_u8(server)
+        user = enc_u8(user)
+        password = enc_u8(password)
+
         #: The Remedy ARS C API shared object file which is used to interact
         #: with the Remedy server
         self.arlib = CDLL('libar_lx64.so')
@@ -101,7 +122,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to perform initialisation against server '
-                '{}'.format(server)
+                '{}'.format(dec_u8(server))
             )
 
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
@@ -131,7 +152,7 @@ class ARS(object):
                 self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
                 raise ARSError(
                     'Unable to set the port to {} and RPC program number to '
-                    '{} for server {}'.format(port, rpc_program_number, server)
+                    '{} for server {}'.format(port, rpc_program_number, dec_u8(server))
                 )
 
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
@@ -157,14 +178,13 @@ class ARS(object):
 
             raise ARSError(
                 'Unable to verify user {} with the current server '
-                '{}'.format(user, server)
+                '{}'.format(dec_u8(user), dec_u8(server))
             )
 
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
 
     def terminate(self):
-        """
-        Perform a cleanup and disconnect the session.
+        """Perform a cleanup and disconnect the session
 
         :raises: ARSError
         """
@@ -189,9 +209,8 @@ class ARS(object):
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
 
     def schemas(self):
-        """
-        Retrieves a list of all available schemas on the specified Remedy
-        ARS server.
+        """Retrieves a list of all available schemas on the specified Remedy
+        ARS server
 
         :return: a list of schema names
         :raises: ARSError
@@ -205,7 +224,7 @@ class ARS(object):
             return self.schema_cache
 
         name_artype = arh.ARNameType()
-        name_artype.value = ''
+        name_artype.value = b''
         schema_list = arh.ARNameList()
 
         if (
@@ -240,7 +259,7 @@ class ARS(object):
 
         # Save the schema list into the cache
         self.schema_cache = [
-            schema_list.nameList[i].value for i in range(schema_list.numItems)
+            dec_u8(schema_list.nameList[i].value) for i in range(schema_list.numItems)
         ]
 
         self.arlib.FreeARNameList(byref(schema_list), arh.FALSE)
@@ -249,22 +268,21 @@ class ARS(object):
         return self.schema_cache
 
     def fields(self, schema):
-        """
-        Returns a list of field names provided by a selected schema.
+        """Returns a list of field names provided by a selected schema
 
         :param str schema: the schema name to retrieve field names for
         :raises: ARSError
         """
 
+        schema = enc_u8(schema)
         # Ensure we have all field and enum details for the schema
         self.update_fields(schema)
 
         # Return just the field names of the selected schema
-        return self.field_name_to_id_cache[schema].keys()
+        return list(self.field_name_to_id_cache[schema].keys())
 
     def get(self, schema, entry_id, fields):
-        """
-        Retrieves a particular entry in the requested schema using the
+        """Retrieves a particular entry in the requested schema using the
         given entry id.
 
         :param str schema: the schema name to retrieve the entry for
@@ -277,6 +295,9 @@ class ARS(object):
         :raises: ARSError
         """
 
+        schema = enc_u8(schema)
+        entry_id = enc_u8(entry_id)
+
         # Ensure we have all field and enum details for the schema
         self.update_fields(schema)
 
@@ -287,7 +308,7 @@ class ARS(object):
             if field not in self.field_name_to_id_cache[schema]:
                 raise ARSError(
                     'A field with name {} does not exist in schema '
-                    '{}'.format(field, schema)
+                    '{}'.format(field, dec_u8(schema))
                 )
 
         entry_id_list = arh.AREntryIdList()
@@ -341,7 +362,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to retrieve the entry with id {} from schema '
-                '{}'.format(entry_id, schema)
+                '{}'.format(dec_u8(entry_id), dec_u8(schema))
             )
 
         # Create an empty dict for the values
@@ -377,8 +398,7 @@ class ARS(object):
             self, schema, qualifier, fields, offset=arh.AR_START_WITH_FIRST_ENTRY,
             limit=arh.AR_NO_MAX_LIST_RETRIEVE
     ):
-        """
-        Runs a specified qualification string against a chosen schema and
+        """Runs a specified qualification string against a chosen schema and
         returns the all related records with the fields specified by the
         caller.
 
@@ -395,6 +415,9 @@ class ARS(object):
         :raises: ARSError
         """
 
+        schema = enc_u8(schema)
+        qualifier = enc_u8(qualifier)
+
         # Ensure we have all field and enum details for the schema
         self.update_fields(schema)
 
@@ -405,13 +428,13 @@ class ARS(object):
             if field not in self.field_name_to_id_cache[schema]:
                 raise ARSError(
                     'A field with name {} does not exist in schema '
-                    '{}'.format(field, schema)
+                    '{}'.format(field, dec_u8(schema))
                 )
 
         schema_artype = arh.ARNameType()
         schema_artype.value = schema
         display_tag_artype = arh.ARNameType()
-        display_tag_artype.value = ''
+        display_tag_artype.value = b''
         qualifier_struct = arh.ARQualifierStruct()
 
         if (
@@ -442,7 +465,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to load the qualifier using the provided '
-                'qualification string for schema {}'.format(schema)
+                'qualification string for schema {}'.format(dec_u8(schema))
             )
 
         # Note that we don't run FreeARQualifierStruct here as we need the
@@ -461,6 +484,7 @@ class ARS(object):
             field_list.fieldsList[i].fieldId = (
                 self.field_name_to_id_cache[schema][field]
             )
+
             # From the C API Reference document (Chapter 3 / Entries)
             # For ARGetListEntryWithFields, set this value to a number greater
             # than 0.
@@ -519,7 +543,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to obtain a list of entries using the provided '
-                'qualification string for schema {}'.format(schema)
+                'qualification string for schema {}'.format(dec_u8(schema))
             )
 
         entries = []
@@ -555,7 +579,7 @@ class ARS(object):
                     self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
                     raise
 
-            entries.append((entry_id, entry_values))
+            entries.append((dec_u8(entry_id), entry_values))
 
         self.arlib.FreeARQualifierStruct(byref(qualifier_struct), arh.FALSE)
         self.arlib.FreeAREntryListFieldList(byref(field_list), arh.FALSE)
@@ -565,8 +589,7 @@ class ARS(object):
         return entries
 
     def create(self, schema, entry_values):
-        """
-        Creates a new entry in a given schema using the provided entry
+        """Creates a new entry in a given schema using the provided entry
         values.
 
         :param str schema: the schema where the entry is to be created
@@ -577,6 +600,7 @@ class ARS(object):
         :return: the entry id of the newly created entry
         :raises: ARSError
         """
+        schema = enc_u8(schema)
 
         # Ensure we have all field and enum details for the schema
         self.update_fields(schema)
@@ -588,7 +612,7 @@ class ARS(object):
             if field not in self.field_name_to_id_cache[schema]:
                 raise ARSError(
                     'A field with name {} does not exist in schema '
-                    '{}'.format(field, schema)
+                    '{}'.format(field, dec_u8(schema))
                 )
 
         # Prepare the fields that will be added to the new entry
@@ -635,7 +659,7 @@ class ARS(object):
             )
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
-                'Unable to create a new entry for schema {}'.format(schema)
+                'Unable to create a new entry for schema {}'.format(dec_u8(schema))
             )
 
         self.arlib.FreeARFieldValueList(byref(field_value_list), arh.FALSE)
@@ -645,8 +669,7 @@ class ARS(object):
         return entry_id_artype.value
 
     def update(self, schema, entry_id, entry_values):
-        """
-        Updates a chosen entry in a given schema using the provided
+        """Updates a chosen entry in a given schema using the provided
         entry values.
 
         :param str schema: the schema where the entry is located
@@ -657,6 +680,8 @@ class ARS(object):
                             of the respective field
         :raises: ARSError
         """
+        schema = enc_u8(schema)
+        entry_id = enc_u8(entry_id)
 
         # Ensure we have all field and enum details for the schema
         self.update_fields(schema)
@@ -668,7 +693,7 @@ class ARS(object):
             if field not in self.field_name_to_id_cache[schema]:
                 raise ARSError(
                     'A field with name {} does not exist in schema '
-                    '{}'.format(field, schema)
+                    '{}'.format(field, dec_u8(schema))
                 )
 
         # Prepare the entry id struct
@@ -730,7 +755,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to modify entry id {} for schema {}'.format(
-                    entry_id, schema
+                    dec_u8(entry_id), dec_u8(schema)
                 )
             )
 
@@ -739,14 +764,15 @@ class ARS(object):
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
 
     def delete(self, schema, entry_id):
-        """
-        Deletes a particular entry in the requested schema using the
+        """Deletes a particular entry in the requested schema using the
         given entry id.
 
         :param str schema: the schema name to delete the entry from
         :param str entry_id: the entry id of the entry that you wish to delete
         :raises: ARSError
         """
+        schema = enc_u8(schema)
+        entry_id = enc_u8(entry_id)
 
         # Clear previous errors
         self.errors = []
@@ -785,7 +811,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to delete entry id {} for schema {}'.format(
-                    entry_id, schema
+                    dec_u8(entry_id), dec_u8(schema)
                 )
             )
 
@@ -793,14 +819,14 @@ class ARS(object):
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
 
     def update_fields(self, schema):
-        """
-        Determines the field IDs for all data fields on a chosen schema and
+        """Determines the field IDs for all data fields on a chosen schema and
         then retrieves the related field names and enum mappings.  This method
         assumes that all field names are unique.
 
         :param str schema: the schema name to retrieve field information for
         :raises: ARSError
         """
+        schema = enc_u8(schema)
 
         # Clear previous errors
         self.errors = []
@@ -846,7 +872,7 @@ class ARS(object):
             self.arlib.FreeARInternalIdList(byref(field_id_list), arh.FALSE)
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
-                'Unable to obtain field ids for schema {}'.format(schema)
+                'Unable to obtain field ids for schema {}'.format(dec_u8(schema))
             )
 
         # Note that we don't run FreeARInternalIdList here as we need the
@@ -929,7 +955,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to obtain field information for schema '
-                '{}'.format(schema)
+                '{}'.format(dec_u8(schema))
             )
 
         # Initialise the name and enum caches for this schema
@@ -942,7 +968,7 @@ class ARS(object):
         for i in range(field_id_list.numItems):
             # Save the field name to id mapping in the cache
             field_id = field_id_list.internalIdList[i]
-            field_name = field_name_list.nameList[i].value
+            field_name = dec_u8(field_name_list.nameList[i].value)
             data_type = field_limits_list.fieldLimitList[i].dataType
 
             # Save the field id to name mapping in the cache
@@ -1005,7 +1031,7 @@ class ARS(object):
                     self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
                     raise ARSError(
                         'The field id {} for schema {} is a query enum which '
-                        'is not supported by PyRemedy'.format(field_id, schema)
+                        'is not supported by PyRemedy'.format(field_id, dec_u8(schema))
                     )
 
         self.arlib.FreeARInternalIdList(byref(field_id_list), arh.FALSE)
@@ -1014,7 +1040,7 @@ class ARS(object):
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
 
     def _register_clib_functions(self):
-        """Explicitly define argument and return types for C functions."""
+        """Explicitly define argument and return types for C functions"""
         # strdup (string.h)
         self.clib.strdup.argtypes = [c_char_p]
         # Please note that the return value of strdup is actually char * but
@@ -1199,18 +1225,21 @@ class ARS(object):
         self.arlib.FreeARStatusList.restype = None
 
     def _extract_field(self, schema, entry_id, field_id, value_struct):
-        """
-        Returns the appropriate value for the schema and field id requested
+        """Returns the appropriate value for the schema and field id requested
         given a particular value structure.
 
         :param str schema: the schema name related to the field you're extract
                            data for
+        :param str entry_id: the entry id of the entry that's retrieved
         :param str field_id: the field id of the schema being retrieved
         :param ARValueStruct value_struct: the Remedy ARValueStruct containing
                                            the data
         :return: the value of the field requested
         :raises: ARSError
         """
+        schema = enc_u8(schema)
+        entry_id = enc_u8(entry_id)
+        field_id = enc_u8(field_id)
 
         # Determine the data type of the value
         data_type = value_struct.dataType
@@ -1227,21 +1256,21 @@ class ARS(object):
         elif data_type == arh.AR_DATA_TYPE_REAL:
             return value_struct.u.realVal
         elif data_type == arh.AR_DATA_TYPE_CHAR:
-            return value_struct.u.charVal
+            return dec_u8(value_struct.u.charVal)
         elif data_type == arh.AR_DATA_TYPE_ENUM:
             return (
-                self.enum_id_to_name_cache[schema][field_id][value_struct.u.enumVal]
+                dec_u8(self.enum_id_to_name_cache[schema][field_id][value_struct.u.enumVal])
             )
         elif data_type == arh.AR_DATA_TYPE_TIME:
             return datetime.fromtimestamp(value_struct.u.timeVal)
         elif data_type == arh.AR_DATA_TYPE_ATTACH:
-            filename = value_struct.u.attachVal.contents.name
+            filename = dec_u8(value_struct.u.attachVal.contents.name)
             contents = self._extract_attachment(schema, entry_id, field_id)
             return filename, contents
         else:
             raise ARSError(
                 'An unknown data type was encountered for field name '
-                '{} on schema {}'.format(field_name, schema)
+                '{} on schema {}'.format(field_name, dec_u8(schema))
             )
 
     def _extract_attachment(self, schema, entry_id, field_id):
@@ -1255,6 +1284,9 @@ class ARS(object):
         :return: the contents of the attachment as a string
         :raises: ARSError
         """
+        schema = enc_u8(schema)
+        entry_id = enc_u8(entry_id)
+        field_id = enc_u8(field_id)
 
         schema_artype = arh.ARNameType()
         schema_artype.value = schema
@@ -1297,7 +1329,7 @@ class ARS(object):
             self.arlib.FreeARStatusList(self.status, arh.FALSE)
             raise ARSError(
                 'Unable to retrieve attachment for field id {} on entry with '
-                'id {} from schema {}'.format(field_id, entry_id, schema)
+                'id {} from schema {}'.format(field_id, dec_u8(entry_id), dec_u8(schema))
             )
 
         contents = string_at(
@@ -1310,8 +1342,7 @@ class ARS(object):
         return contents
 
     def _update_field(self, schema, field_id, value, field_value_struct):
-        """
-        Updates a provided ARFieldValueStruct item with the appropriate
+        """Updates a provided ARFieldValueStruct item with the appropriate
         field information based on the type of value provided.
 
         :param str schema: the schema name related to the field you're updating
@@ -1323,6 +1354,9 @@ class ARS(object):
                                                       field id and value
         :raises: ARSError
         """
+        schema = enc_u8(schema)
+        field_id = enc_u8(field_id)
+        value = enc_u8(value)
 
         # Determine the data type of the value
         data_type = self.field_id_to_type_cache[schema][field_id]
@@ -1343,7 +1377,7 @@ class ARS(object):
             if value is None:
                 raise ARSError(
                     'The value specified for field name {} on schema {} '
-                    'cannot be None'.format(field_name, schema)
+                    'cannot be None'.format(field_name, dec_u8(schema))
                 )
             # Note that we must allocate a new block of memory using
             # strdup or we end up with a nasty invalid pointer error
@@ -1356,7 +1390,7 @@ class ARS(object):
             except KeyError:
                 raise ARSError(
                     'An invalid value {} was specified for field name {} '
-                    'on schema {}'.format(value, field_name, schema)
+                    'on schema {}'.format(dec_u8(value), field_name, dec_u8(schema))
                 )
             field_value_struct.value.u.enumVal = enum_id
         elif data_type == arh.AR_DATA_TYPE_TIME:
@@ -1364,17 +1398,17 @@ class ARS(object):
         else:
             raise ARSError(
                 'An unknown data type was encountered for field name {} '
-                'on schema {}'.format(field_name, schema)
+                'on schema {}'.format(field_name, dec_u8(schema))
             )
 
     def _update_errors(self, schema=None):
-        """
-        Updates the errors attribute with any errors that occurred on the
+        """Updates the errors attribute with any errors that occurred on the
         last operation based on the status struct.
 
         :param str schema: the schema name related to the error (only required
                            for create and update operations)
         """
+        schema = enc_u8(schema)
 
         # Go through each error present and add them to the errors list
         for i in range(self.status.numItems):
@@ -1399,4 +1433,4 @@ class ARS(object):
                 else:
                     appended_text = self.status.statusList[i].appendedText
 
-            self.errors.append((message_number, message_text, appended_text))
+            self.errors.append((message_number, dec_u8(message_text), dec_u8(appended_text)))
