@@ -499,24 +499,6 @@ class ARS(object):
         entries = []
 
         for i in range(entry_list.numItems):
-            # Entries containing more than one id are not supported
-            # (ids are supposed to be unique aren't they?)
-            if entry_list.entryList[i].entryId.numItems != 1:
-                self.arlib.FreeARQualifierStruct(
-                    byref(qualifier_struct), arh.FALSE
-                )
-                self.arlib.FreeAREntryListFieldList(
-                    byref(field_list), arh.FALSE
-                )
-                self.arlib.FreeAREntryListFieldValueList(
-                    byref(entry_list), arh.FALSE
-                )
-                self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
-                raise ARSError(
-                    'One or more entries contained multiple IDs that are not '
-                    'supported by PyRemedy'
-                )
-
             # Extract the entry id and create an empty dict for the values
             entry_id = entry_list.entryList[i].entryId.entryIdList[0].value
             entry_values = {}
