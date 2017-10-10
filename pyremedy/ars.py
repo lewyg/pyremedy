@@ -1375,15 +1375,13 @@ class ARS(object):
         elif data_type == arh.AR_DATA_TYPE_CHAR:
             # Ensure that we don't pass a NULL pointer into strdup
             if value is None:
-                raise ARSError(
-                    'The value specified for field name {} on schema {} '
-                    'cannot be None'.format(field_name, dec_u8(schema))
+                field_value_struct.value.u.charVal = None
+            else:
+                # Note that we must allocate a new block of memory using
+                # strdup or we end up with a nasty invalid pointer error
+                field_value_struct.value.u.charVal = cast(
+                    self.clib.strdup(value), c_char_p
                 )
-            # Note that we must allocate a new block of memory using
-            # strdup or we end up with a nasty invalid pointer error
-            field_value_struct.value.u.charVal = cast(
-                self.clib.strdup(value), c_char_p
-            )
         elif data_type == arh.AR_DATA_TYPE_ENUM:
             try:
                 enum_id = self.enum_name_to_id_cache[schema][field_id][value]
