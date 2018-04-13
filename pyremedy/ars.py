@@ -549,6 +549,18 @@ class ARS(object):
         entries = []
 
         for i in range(entry_list.numItems):
+            # Entries containing more than one id are not supported
+            # (ids are supposed to be unique aren't they?)
+            # if entry_list.entryList[i].entryId.numItems != 1:
+            #     print('DEBUG: {num_items} number of items found'.format(
+            #         num_items=entry_list.entryList[i].entryId.numItems
+            #     ))
+            #
+            #     for j in range(entry_list.entryList[i].entryId.numItems):
+            #         print('DEBUG: item id : {id}'.format(
+            #             id=entry_list.entryList[i].entryId.entryIdList[j].value
+            #         ))
+
             # Extract the entry id and create an empty dict for the values
             entry_id = entry_list.entryList[i].entryId.entryIdList[0].value
             entry_values = {}
@@ -882,6 +894,7 @@ class ARS(object):
         field_name_list = arh.ARNameList()
         field_exist_list = arh.ARBooleanList()
         field_limits_list = arh.ARFieldLimitList()
+        field_data_type_list = arh.ARUnsignedIntList()
 
         if (
                     self.arlib.ARGetMultipleFields(
@@ -904,7 +917,7 @@ class ARS(object):
                         # underlying form which to retrieve fields
                         None,
                         # (return) ARUnsignedIntList *dataType: field data types
-                        None,
+                        byref(field_data_type_list),
                         # (return) ARUnsignedIntList *option: flags indicating whether
                         # users must enter values in the form
                         None,
@@ -952,6 +965,8 @@ class ARS(object):
             self.arlib.FreeARInternalIdList(byref(field_id_list), arh.FALSE)
             self.arlib.FreeARBooleanList(byref(field_exist_list), arh.FALSE)
             self.arlib.FreeARNameList(byref(field_name_list), arh.FALSE)
+            self.arlib.FreeARFieldLimitList(byref(field_limits_list), arh.FALSE)
+            self.arlib.FreeARUnsignedIntList(byref(field_data_type_list), arh.FALSE)
             self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
             raise ARSError(
                 'Unable to obtain field information for schema '
@@ -969,7 +984,7 @@ class ARS(object):
             # Save the field name to id mapping in the cache
             field_id = field_id_list.internalIdList[i]
             field_name = dec_u8(field_name_list.nameList[i].value)
-            data_type = field_limits_list.fieldLimitList[i].dataType
+            data_type = field_data_type_list.intList[i]
 
             # Save the field id to name mapping in the cache
             self.field_id_to_name_cache[schema][field_id] = field_name
@@ -1037,6 +1052,8 @@ class ARS(object):
         self.arlib.FreeARInternalIdList(byref(field_id_list), arh.FALSE)
         self.arlib.FreeARBooleanList(byref(field_exist_list), arh.FALSE)
         self.arlib.FreeARNameList(byref(field_name_list), arh.FALSE)
+        self.arlib.FreeARFieldLimitList(byref(field_limits_list), arh.FALSE)
+        self.arlib.FreeARUnsignedIntList(byref(field_data_type_list), arh.FALSE)
         self.arlib.FreeARStatusList(byref(self.status), arh.FALSE)
 
     def _register_clib_functions(self):
@@ -1392,7 +1409,7 @@ class ARS(object):
                 )
             field_value_struct.value.u.enumVal = enum_id
         elif data_type == arh.AR_DATA_TYPE_TIME:
-            field_value_struct.value.u.timeVal = value.strftime('%s')
+            field_value_struct.value.u.timeVal = int(value.strftime('%s'))
         else:
             raise ARSError(
                 'An unknown data type was encountered for field name {} '
